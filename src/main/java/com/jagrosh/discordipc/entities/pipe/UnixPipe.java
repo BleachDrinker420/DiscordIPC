@@ -32,74 +32,70 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 
-public class UnixPipe extends Pipe
-{
+public class UnixPipe extends Pipe {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(UnixPipe.class);
-    private final AFUNIXSocket socket;
+	private static final Logger LOGGER = LoggerFactory.getLogger(UnixPipe.class);
+	private final AFUNIXSocket socket;
 
-    UnixPipe(IPCClient ipcClient, HashMap<String, Callback> callbacks, String location) throws IOException
-    {
-        super(ipcClient, callbacks);
+	UnixPipe(IPCClient ipcClient, HashMap<String, Callback> callbacks, String location) throws IOException {
+		super(ipcClient, callbacks);
 
-        socket = AFUNIXSocket.newInstance();
-        socket.connect(new AFUNIXSocketAddress(new File(location)));
-    }
+		socket = AFUNIXSocket.newInstance();
+		socket.connect(new AFUNIXSocketAddress(new File(location)));
+	}
 
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    @Override
-    public Packet read() throws IOException, JSONException
-    {
-        InputStream is = socket.getInputStream();
+	@SuppressWarnings("ResultOfMethodCallIgnored")
+	@Override
+	public Packet read() throws IOException, JSONException {
+		InputStream is = socket.getInputStream();
 
-        while((status == PipeStatus.CONNECTED || status == PipeStatus.CLOSING)  && is.available() == 0)
-        {
-            try {
-                Thread.sleep(50);
-            } catch(InterruptedException ignored) {}
-        }
+		while ((status == PipeStatus.CONNECTED || status == PipeStatus.CLOSING) && is.available() == 0) {
+			try {
+				Thread.sleep(50);
+			} catch (InterruptedException ignored) {
+			}
+		}
 
-        /*byte[] buf = new byte[is.available()];
-        is.read(buf, 0, buf.length);
-        LOGGER.info(new String(buf));
+		/*
+		 * byte[] buf = new byte[is.available()]; is.read(buf, 0, buf.length);
+		 * LOGGER.info(new String(buf));
+		 * 
+		 * if (true) return null;
+		 */
 
-        if (true) return null;*/
+		if (status == PipeStatus.DISCONNECTED)
+			throw new IOException("Disconnected!");
 
-        if(status==PipeStatus.DISCONNECTED)
-            throw new IOException("Disconnected!");
+		if (status == PipeStatus.CLOSED)
+			return new Packet(Packet.OpCode.CLOSE, null);
 
-        if(status==PipeStatus.CLOSED)
-            return new Packet(Packet.OpCode.CLOSE, null);
+		// Read the op and length. Both are signed ints
+		byte[] d = new byte[8];
+		is.read(d);
+		ByteBuffer bb = ByteBuffer.wrap(d);
 
-        // Read the op and length. Both are signed ints
-        byte[] d = new byte[8];
-        is.read(d);
-        ByteBuffer bb = ByteBuffer.wrap(d);
+		Packet.OpCode op = Packet.OpCode.values()[Integer.reverseBytes(bb.getInt())];
+		d = new byte[Integer.reverseBytes(bb.getInt())];
 
-        Packet.OpCode op = Packet.OpCode.values()[Integer.reverseBytes(bb.getInt())];
-        d = new byte[Integer.reverseBytes(bb.getInt())];
+		is.read(d);
+		Packet p = new Packet(op, new JSONObject(new String(d)));
+		LOGGER.debug(String.format("Received packet: %s", p.toString()));
+		if (listener != null)
+			listener.onPacketReceived(ipcClient, p);
+		return p;
+	}
 
-        is.read(d);
-        Packet p = new Packet(op, new JSONObject(new String(d)));
-        LOGGER.debug(String.format("Received packet: %s", p.toString()));
-        if(listener != null)
-            listener.onPacketReceived(ipcClient, p);
-        return p;
-    }
+	@Override
+	public void write(byte[] b) throws IOException {
+		socket.getOutputStream().write(b);
+	}
 
-    @Override
-    public void write(byte[] b) throws IOException
-    {
-        socket.getOutputStream().write(b);
-    }
-
-    @Override
-    public void close() throws IOException
-    {
-        LOGGER.debug("Closing IPC pipe...");
-        status = PipeStatus.CLOSING;
-        send(Packet.OpCode.CLOSE, new JSONObject(), null);
-        status = PipeStatus.CLOSED;
-        socket.close();
-    }
+	@Override
+	public void close() throws IOException {
+		LOGGER.debug("Closing IPC pipe...");
+		status = PipeStatus.CLOSING;
+		send(Packet.OpCode.CLOSE, new JSONObject(), null);
+		status = PipeStatus.CLOSED;
+		socket.close();
+	}
 }

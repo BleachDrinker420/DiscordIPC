@@ -44,7 +44,6 @@ public class UnixPipe extends Pipe {
 		socket.connect(new AFUNIXSocketAddress(new File(location)));
 	}
 
-	@SuppressWarnings("ResultOfMethodCallIgnored")
 	@Override
 	public Packet read() throws IOException, JSONException {
 		InputStream is = socket.getInputStream();

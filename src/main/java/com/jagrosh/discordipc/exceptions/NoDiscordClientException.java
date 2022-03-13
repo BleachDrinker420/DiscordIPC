@@ -32,4 +32,6 @@ import com.jagrosh.discordipc.entities.DiscordBuild;
  */
 public class NoDiscordClientException extends Exception {
 
+	private static final long serialVersionUID = 2L;
+
 }

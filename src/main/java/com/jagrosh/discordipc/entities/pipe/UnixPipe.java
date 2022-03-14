@@ -79,7 +79,7 @@ public class UnixPipe extends Pipe {
 
 		is.read(d);
 
-		@SuppressWarnings("deprecation")
+		// @SuppressWarnings("deprecation")
 		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
 		LOGGER.debug(String.format("Received packet: %s", p.toString()));
 		if (listener != null)

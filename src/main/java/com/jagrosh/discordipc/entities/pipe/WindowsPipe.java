@@ -74,7 +74,7 @@ public class WindowsPipe extends Pipe {
 
 		file.readFully(d);
 
-		@SuppressWarnings("deprecation")
+		// @SuppressWarnings("deprecation")
 		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
 		LOGGER.debug(String.format("Received packet: %s", p.toString()));
 		if (listener != null)

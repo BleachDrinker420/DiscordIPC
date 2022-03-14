@@ -15,12 +15,12 @@
  */
 package com.jagrosh.discordipc.entities;
 
-import java.time.OffsetDateTime;
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
 /**
- * An encapsulation of all data needed to properly construct a JSON RichPresence
+ * An encapsulation of all data needed to properly construct a Json RichPresence
  * payload.
  *
  * <p>
@@ -31,8 +31,8 @@ import org.json.JSONObject;
 public class RichPresence {
 	private final String state;
 	private final String details;
-	private final OffsetDateTime startTimestamp;
-	private final OffsetDateTime endTimestamp;
+	private final long startTimestamp;
+	private final long endTimestamp;
 	private final String largeImageKey;
 	private final String largeImageText;
 	private final String smallImageKey;
@@ -45,7 +45,7 @@ public class RichPresence {
 	private final String spectateSecret;
 	private final boolean instance;
 
-	public RichPresence(String state, String details, OffsetDateTime startTimestamp, OffsetDateTime endTimestamp,
+	public RichPresence(String state, String details, long startTimestamp, long endTimestamp,
 			String largeImageKey, String largeImageText, String smallImageKey, String smallImageText, String partyId,
 			int partySize, int partyMax, String matchSecret, String joinSecret, String spectateSecret,
 			boolean instance) {
@@ -67,31 +67,51 @@ public class RichPresence {
 	}
 
 	/**
-	 * Constructs a {@link JSONObject} representing a payload to send to discord to
+	 * Constructs a {@link JsonObject} representing a payload to send to discord to
 	 * update a user's Rich Presence.
 	 *
 	 * <p>
 	 * This is purely internal, and should not ever need to be called outside of the
 	 * library.
 	 *
-	 * @return A JSONObject payload for updating a user's Rich Presence.
+	 * @return A JsonObject payload for updating a user's Rich Presence.
 	 */
-	public JSONObject toJson() {
-		return new JSONObject().put("state", state).put("details", details)
-				.put("timestamps",
-						new JSONObject().put("start", startTimestamp == null ? null : startTimestamp.toEpochSecond())
-								.put("end", endTimestamp == null ? null : endTimestamp.toEpochSecond()))
-				.put("assets",
-						new JSONObject().put("large_image", largeImageKey).put("large_text", largeImageText)
-								.put("small_image", smallImageKey).put("small_text", smallImageText))
-				.put("party",
-						partyId == null
-								? null
-								: new JSONObject().put("id", partyId).put("size",
-										new JSONArray().put(partySize).put(partyMax)))
-				.put("secrets", new JSONObject().put("join", joinSecret).put("spectate", spectateSecret).put("match",
-						matchSecret))
-				.put("instance", instance);
+	public JsonObject toJson() {
+		JsonObject json = new JsonObject();
+		if (state != null && !state.isEmpty()) json.addProperty("state", state);
+		if (details != null && !details.isEmpty()) json.addProperty("details", details);
+
+		JsonObject timestamps = new JsonObject();
+		if (startTimestamp != -1) timestamps.addProperty("start", startTimestamp);
+		if (endTimestamp != -1) timestamps.addProperty("end", endTimestamp);
+		if (timestamps.size() > 0) json.add("timestamps", timestamps);
+
+		JsonObject assets = new JsonObject();
+		if (largeImageKey != null) assets.addProperty("large_image", largeImageKey);
+		if (largeImageText != null) assets.addProperty("large_text", largeImageText);
+		if (smallImageKey != null) assets.addProperty("small_image", smallImageKey);
+		if (smallImageText != null) assets.addProperty("small_text", smallImageText);
+		if (assets.size() > 0) json.add("assets", assets);
+
+		if (partyId != null) {
+			JsonObject party = new JsonObject();
+			party.addProperty("id", partyId);
+
+			JsonArray size = new JsonArray();
+			size.add(new JsonPrimitive(partySize));
+			size.add(new JsonPrimitive(partyMax));
+			party.add("size", size);
+			json.add("party", party);
+		}
+
+		JsonObject secrets = new JsonObject();
+		if (joinSecret != null) secrets.addProperty("join", joinSecret);
+		if (spectateSecret != null) secrets.addProperty("spectate", spectateSecret);
+		if (matchSecret != null) secrets.addProperty("match", matchSecret);
+		if (secrets.size() > 0) json.add("secrets", secrets);
+
+		json.addProperty("instance", instance);
+		return json;
 	}
 
 	/**
@@ -105,8 +125,8 @@ public class RichPresence {
 	public static class Builder {
 		private String state;
 		private String details;
-		private OffsetDateTime startTimestamp;
-		private OffsetDateTime endTimestamp;
+		private long startTimestamp = -1;
+		private long endTimestamp = -1;
 		private String largeImageKey;
 		private String largeImageText;
 		private String smallImageKey;
@@ -161,7 +181,7 @@ public class RichPresence {
 		 *
 		 * @return This Builder.
 		 */
-		public Builder setStartTimestamp(OffsetDateTime startTimestamp) {
+		public Builder setStartTimestamp(long startTimestamp) {
 			this.startTimestamp = startTimestamp;
 			return this;
 		}
@@ -173,7 +193,7 @@ public class RichPresence {
 		 *
 		 * @return This Builder.
 		 */
-		public Builder setEndTimestamp(OffsetDateTime endTimestamp) {
+		public Builder setEndTimestamp(long endTimestamp) {
 			this.endTimestamp = endTimestamp;
 			return this;
 		}

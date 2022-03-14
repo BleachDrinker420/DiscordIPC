@@ -16,14 +16,14 @@
 
 package com.jagrosh.discordipc.entities.pipe;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.jagrosh.discordipc.IPCClient;
 import com.jagrosh.discordipc.IPCListener;
 import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.DiscordBuild;
 import com.jagrosh.discordipc.entities.Packet;
 import com.jagrosh.discordipc.exceptions.NoDiscordClientException;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,13 +62,16 @@ public abstract class Pipe {
 				LOGGER.debug(String.format("Searching for IPC: %s", location));
 				pipe = createPipe(ipcClient, callbacks, location);
 
-				pipe.send(Packet.OpCode.HANDSHAKE,
-						new JSONObject().put("v", VERSION).put("client_id", Long.toString(clientId)), null);
+				JsonObject dataJson = new JsonObject();
+				dataJson.addProperty("v", VERSION);
+				dataJson.addProperty("client_id", Long.toString(clientId));
+
+				pipe.send(Packet.OpCode.HANDSHAKE, dataJson, null);
 
 				Packet p = pipe.read(); // this is a valid client at this point
 
 				pipe.build = DiscordBuild
-						.from(p.getJson().getJSONObject("data").getJSONObject("config").getString("api_endpoint"));
+						.from(p.getJson().getAsJsonObject("data").getAsJsonObject("config").get("api_endpoint").getAsString());
 
 				LOGGER.debug(
 						String.format("Found a valid client (%s) with packet: %s", pipe.build.name(), p.toString()));
@@ -83,7 +86,7 @@ public abstract class Pipe {
 
 				pipe.build = null;
 				pipe = null;
-			} catch (IOException | JSONException ex) {
+			} catch (IOException | JsonParseException ex) {
 				pipe = null;
 			}
 		}
@@ -98,7 +101,7 @@ public abstract class Pipe {
 					pipe = open[cb.ordinal()];
 					open[cb.ordinal()] = null;
 					if (cb == DiscordBuild.ANY) // if we pulled this from the 'any' slot, we need to figure out which
-												// build it was
+						// build it was
 					{
 						for (int k = 0; k < open.length; k++) {
 							if (open[k] == pipe) {
@@ -160,12 +163,15 @@ public abstract class Pipe {
 	 * @param data     The data to send.
 	 * @param callback callback for the response
 	 */
-	public void send(Packet.OpCode op, JSONObject data, Callback callback) {
+	public void send(Packet.OpCode op, JsonObject data, Callback callback) {
 		try {
 			String nonce = generateNonce();
-			Packet p = new Packet(op, data.put("nonce", nonce));
+			data.addProperty("nonce", nonce);
+
+			Packet p = new Packet(op, data);
 			if (callback != null && !callback.isEmpty())
 				callbacks.put(nonce, callback);
+
 			write(p.toBytes());
 			LOGGER.debug(String.format("Sent packet: %s", p.toString()));
 			if (listener != null)
@@ -182,10 +188,10 @@ public abstract class Pipe {
 	 *
 	 * @return A valid {@link Packet}.
 	 *
-	 * @throws IOException   If the pipe breaks.
-	 * @throws JSONException If the read thread receives bad data.
+	 * @throws IOException        If the pipe breaks.
+	 * @throws JsonParseException If the read thread receives bad data.
 	 */
-	public abstract Packet read() throws IOException, JSONException;
+	public abstract Packet read() throws IOException, JsonParseException;
 
 	public abstract void write(byte[] b) throws IOException;
 

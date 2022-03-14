@@ -16,11 +16,12 @@
 
 package com.jagrosh.discordipc.entities.pipe;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.jagrosh.discordipc.IPCClient;
 import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.Packet;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +51,7 @@ public class WindowsPipe extends Pipe {
 	}
 
 	@Override
-	public Packet read() throws IOException, JSONException {
+	public Packet read() throws IOException, JsonParseException {
 		// Should check if we're connected before reading the file.
 		// When we don't do this, it results in an IOException because the
 		// read stream had closed for the RandomAccessFile#length() call.
@@ -72,7 +73,9 @@ public class WindowsPipe extends Pipe {
 		byte[] d = new byte[len];
 
 		file.readFully(d);
-		Packet p = new Packet(op, new JSONObject(new String(d)));
+
+		@SuppressWarnings("deprecation")
+		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
 		LOGGER.debug(String.format("Received packet: %s", p.toString()));
 		if (listener != null)
 			listener.onPacketReceived(ipcClient, p);
@@ -83,7 +86,7 @@ public class WindowsPipe extends Pipe {
 	public void close() throws IOException {
 		LOGGER.debug("Closing IPC pipe...");
 		status = PipeStatus.CLOSING; // start closing pipe
-		send(Packet.OpCode.CLOSE, new JSONObject(), null);
+		send(Packet.OpCode.CLOSE, new JsonObject(), null);
 		status = PipeStatus.CLOSED; // finish closing pipe
 		file.close();
 	}

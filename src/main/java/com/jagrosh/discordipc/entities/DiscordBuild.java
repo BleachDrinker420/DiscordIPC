@@ -15,45 +15,41 @@
  */
 package com.jagrosh.discordipc.entities;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Constants representing various Discord client builds, such as Stable, Canary,
  * Public Test Build (PTB)
  */
 public enum DiscordBuild {
+
 	/**
 	 * Constant for the current Discord Canary release.
 	 */
-	CANARY("//canary.discordapp.com/api"),
+	CANARY("//canary.discord.com/api"),
 
 	/**
 	 * Constant for the current Discord Public Test Build or PTB release.
 	 */
-	PTB("//ptb.discordapp.com/api"),
+	PTB("//ptb.discord.com/api"),
 
 	/**
 	 * Constant for the current stable Discord release.
 	 */
-	STABLE("//discordapp.com/api"),
+	STABLE("//discord.com/api"),
 
 	/**
-	 * 'Wildcard' build constant used in
-	 * {@link com.jagrosh.discordipc.IPCClient#connect(DiscordBuild...)
-	 * IPCClient#connect(DiscordBuild...)} to signify that the build to target is
-	 * not important, and that the first valid build will be used.
-	 * <p>
-	 *
-	 * Other than this exact function, there is no use for this value.
+	 * Constant for a unknown Discord release.
 	 */
-	ANY;
+	UNKNOWN(null);
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(DiscordBuild.class);
 
 	private final String endpoint;
 
 	DiscordBuild(String endpoint) {
 		this.endpoint = endpoint;
-	}
-
-	DiscordBuild() {
-		this(null);
 	}
 
 	/**
@@ -65,7 +61,7 @@ public enum DiscordBuild {
 	 * @param endpoint The endpoint to get from.
 	 *
 	 * @return The DiscordBuild corresponding to the endpoint, or
-	 *         {@link DiscordBuild#ANY} if none match.
+	 *         {@code null} if none match.
 	 */
 	public static DiscordBuild from(String endpoint) {
 		for (DiscordBuild value : values()) {
@@ -73,6 +69,8 @@ public enum DiscordBuild {
 				return value;
 			}
 		}
-		return ANY;
+
+		LOGGER.info("Found unknown discord build, endpoint: {}", endpoint);
+		return UNKNOWN;
 	}
 }

@@ -31,14 +31,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.Map;
 
 public class UnixPipe extends Pipe {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(UnixPipe.class);
 	private final AFUNIXSocket socket;
 
-	UnixPipe(IPCClient ipcClient, HashMap<String, Callback> callbacks, String location) throws IOException {
+	UnixPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
 		super(ipcClient, callbacks);
 
 		socket = AFUNIXSocket.newInstance();
@@ -81,7 +81,7 @@ public class UnixPipe extends Pipe {
 
 		// @SuppressWarnings("deprecation")
 		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
-		LOGGER.debug(String.format("Received packet: %s", p.toString()));
+		LOGGER.debug("Received packet: {}", p.toString());
 		if (listener != null)
 			listener.onPacketReceived(ipcClient, p);
 		return p;

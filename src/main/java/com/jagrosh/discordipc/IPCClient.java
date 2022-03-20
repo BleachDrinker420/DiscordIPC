@@ -29,6 +29,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 
 /**
  * Represents a Discord IPC Client that can send and receive Rich Presence data.
@@ -58,7 +61,7 @@ import java.util.HashMap;
 public final class IPCClient implements Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IPCClient.class);
 	private final long clientId;
-	private final HashMap<String, Callback> callbacks = new HashMap<>();
+	private final Map<String, Callback> callbacks = new HashMap<>();
 	private volatile Pipe pipe;
 	private IPCListener listener = null;
 	private Thread readThread = null;
@@ -104,6 +107,8 @@ public final class IPCClient implements Closeable {
 	 * Discord.</b>
 	 *
 	 * @param preferredOrder the priority order of client builds to connect to
+	 * 
+	 * @return The IPCClient's {@link DiscordBuild}.
 	 *
 	 * @throws IllegalStateException    There is an open connection on this
 	 *                                  IPCClient.
@@ -111,17 +116,25 @@ public final class IPCClient implements Closeable {
 	 *                                  {@link DiscordBuild build type}(s) was
 	 *                                  found.
 	 */
-	public void connect(DiscordBuild... preferredOrder) throws NoDiscordClientException {
+	public DiscordBuild connect(DiscordBuild... preferredOrder) throws NoDiscordClientException {
 		validateConnected(false);
 		callbacks.clear();
-		pipe = null;
 
+		pipe = null;
 		pipe = Pipe.openPipe(this, clientId, callbacks, preferredOrder);
 
 		LOGGER.debug("Client is now connected and ready!");
 		if (listener != null)
 			listener.onReady(this);
 		startReading();
+
+		return pipe.getDiscordBuild();
+	}
+
+	public Future<DiscordBuild> connectAsync(DiscordBuild... preferredOrder) {
+		FutureTask<DiscordBuild> future = new FutureTask<>(() -> connect(preferredOrder));
+		new Thread(future::run).start();
+		return future;
 	}
 
 	/**
@@ -209,7 +222,7 @@ public final class IPCClient implements Closeable {
 		validateConnected(true);
 		if (!sub.isSubscribable())
 			throw new IllegalStateException("Cannot subscribe to " + sub + " event!");
-		LOGGER.debug(String.format("Subscribing to Event: %s", sub.name()));
+		LOGGER.debug("Subscribing to Event: {}", sub.name());
 
 		JsonObject json = new JsonObject();
 		json.addProperty("cmd", "SUBSCRIBE");

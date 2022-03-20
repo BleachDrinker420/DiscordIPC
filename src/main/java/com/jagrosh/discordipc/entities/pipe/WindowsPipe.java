@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.util.HashMap;
+import java.util.Map;
 
 public class WindowsPipe extends Pipe {
 
@@ -36,7 +36,7 @@ public class WindowsPipe extends Pipe {
 
 	private final RandomAccessFile file;
 
-	WindowsPipe(IPCClient ipcClient, HashMap<String, Callback> callbacks, String location) {
+	WindowsPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) {
 		super(ipcClient, callbacks);
 		try {
 			this.file = new RandomAccessFile(location, "rw");
@@ -76,7 +76,7 @@ public class WindowsPipe extends Pipe {
 
 		// @SuppressWarnings("deprecation")
 		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
-		LOGGER.debug(String.format("Received packet: %s", p.toString()));
+		LOGGER.debug("Received packet: {}", p.toString());
 		if (listener != null)
 			listener.onPacketReceived(ipcClient, p);
 		return p;

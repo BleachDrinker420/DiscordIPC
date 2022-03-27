@@ -22,27 +22,25 @@ import com.google.gson.JsonParser;
 import com.jagrosh.discordipc.IPCClient;
 import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.Packet;
-import org.newsclub.net.unix.AFUNIXSocket;
-import org.newsclub.net.unix.AFUNIXSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class UnixPipe extends Pipe {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(UnixPipe.class);
-	private final AFUNIXSocket socket;
+	private final Socket socket;
 
 	UnixPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
 		super(ipcClient, callbacks);
 
-		socket = AFUNIXSocket.newInstance();
-		socket.connect(new AFUNIXSocketAddress(new File(location)));
+		socket = new Socket();
+		socket.connect(UnixDomainSocketAddress.of(location));
 	}
 
 	@Override

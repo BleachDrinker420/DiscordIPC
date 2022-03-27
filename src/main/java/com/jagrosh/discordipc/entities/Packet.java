@@ -16,6 +16,7 @@
 package com.jagrosh.discordipc.entities;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 import com.google.gson.JsonObject;
 
@@ -48,7 +49,7 @@ public class Packet {
 	 * @return This Packet as a {@code byte} array.
 	 */
 	public byte[] toBytes() {
-		byte[] d = data.toString().getBytes();
+		byte[] d = data.toString().getBytes(StandardCharsets.UTF_8);
 		ByteBuffer packet = ByteBuffer.allocate(d.length + 2 * Integer.BYTES);
 		packet.putInt(Integer.reverseBytes(op.ordinal()));
 		packet.putInt(Integer.reverseBytes(d.length));

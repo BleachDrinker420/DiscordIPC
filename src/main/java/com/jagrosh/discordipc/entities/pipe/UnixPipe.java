@@ -20,7 +20,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.jagrosh.discordipc.IPCClient;
-import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.Packet;
 
 import org.newsclub.net.unix.AFUNIXSocket;
@@ -33,7 +32,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Map;
 
 public class UnixPipe extends Pipe {
 
@@ -41,8 +39,8 @@ public class UnixPipe extends Pipe {
 
 	private final AFUNIXSocket socket;
 
-	UnixPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
-		super(ipcClient, callbacks);
+	UnixPipe(IPCClient ipcClient, String location) throws IOException {
+		super(ipcClient);
 
 		socket = AFUNIXSocket.connectTo(new AFUNIXSocketAddress(new File(location)));
 	}

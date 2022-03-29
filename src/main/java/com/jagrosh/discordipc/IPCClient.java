@@ -59,9 +59,9 @@ import java.util.concurrent.FutureTask;
  * @author John Grosh (john.a.grosh@gmail.com)
  */
 public final class IPCClient implements Closeable {
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(IPCClient.class);
 	private final long clientId;
-	private final Map<String, Callback> callbacks = new HashMap<>();
 	private volatile Pipe pipe;
 	private IPCListener listener = null;
 	private Thread readThread = null;
@@ -118,10 +118,9 @@ public final class IPCClient implements Closeable {
 	 */
 	public DiscordBuild connect(DiscordBuild... preferredOrder) throws NoDiscordClientException {
 		validateConnected(false);
-		callbacks.clear();
 
 		pipe = null;
-		pipe = Pipe.openPipe(this, clientId, callbacks, preferredOrder);
+		pipe = Pipe.openPipe(this, clientId, preferredOrder);
 
 		LOGGER.debug("Client is now connected and ready!");
 		if (listener != null)
@@ -169,7 +168,7 @@ public final class IPCClient implements Closeable {
 	 * Sending this again will overwrite the last provided {@link RichPresence}.
 	 *
 	 * @param presence The {@link RichPresence} to send.
-	 * @param callback A {@link Callback} to handle success or error
+	 * @param callback A {@link Callback} to handle success or error.
 	 *
 	 * @throws IllegalStateException If a connection was not made prior to invoking
 	 *                               this method.
@@ -213,7 +212,7 @@ public final class IPCClient implements Closeable {
 	 * closing} the connection and creating a new one.
 	 *
 	 * @param sub      The event {@link Event} to add.
-	 * @param callback The {@link Callback} to handle success or failure
+	 * @param callback The {@link Callback} to handle success or failure.
 	 *
 	 * @throws IllegalStateException If a connection was not made prior to invoking
 	 *                               this method.
@@ -282,6 +281,91 @@ public final class IPCClient implements Closeable {
 		return pipe.getDiscordBuild();
 	}
 
+	// Private methods
+
+	/**
+	 * Makes sure that the client is connected (or not) depending on if it should
+	 * for the current state.
+	 *
+	 * @param connected Whether to check in the context of the IPCClient being
+	 *                  connected or not.
+	 */
+	private void validateConnected(boolean connected) {
+		if (connected && getStatus() != PipeStatus.CONNECTED)
+			throw new IllegalStateException(String.format("IPCClient (ID: %d) is not connected!", clientId));
+		if (!connected && getStatus() == PipeStatus.CONNECTED)
+			throw new IllegalStateException(String.format("IPCClient (ID: %d) is already connected!", clientId));
+	}
+
+	/**
+	 * Initializes this IPCClient's {@link IPCClient#readThread readThread} and
+	 * calls the first {@link Pipe#read()}.
+	 */
+	private void startReading() {
+		readThread = new Thread(() -> {
+			try {
+				Packet p;
+				while ((p = pipe.read()).getOp() != OpCode.CLOSE) {
+					JsonObject json = p.getJson();
+					Event event = Event.of(json.has("evt") ? json.getAsJsonPrimitive("evt").getAsString() : null);
+					JsonObject data = json.has("data") ? json.getAsJsonObject("data") : null;
+					
+					LOGGER.debug("Reading thread received a '" + event + "' event.");
+					if (data != null && data.has("message"))
+						LOGGER.debug("Message: {}", data.get("message").getAsString());
+
+					if (listener != null && json.has("cmd") && json.get("cmd").getAsString().equals("DISPATCH")) {
+						try {
+							switch (event) {
+								case ACTIVITY_JOIN:
+									listener.onActivityJoin(this, data.get("secret").getAsString());
+									break;
+
+								case ACTIVITY_SPECTATE:
+									listener.onActivitySpectate(this, data.get("secret").getAsString());
+									break;
+
+								case ACTIVITY_JOIN_REQUEST:
+									JsonObject u = data.getAsJsonObject("user");
+									User user = new User(u.get("username").getAsString(), u.get("discriminator").getAsString(),
+											u.get("id").getAsLong(), u.has("avatar") ? u.get("avatar").getAsString() : null);
+
+									listener.onActivityJoinRequest(this, data.has("secret") ? data.get("secret").getAsString() : null, user);
+									break;
+							}
+						} catch (Exception e) {
+							LOGGER.error("Exception when handling event: ", e);
+						}
+					}
+				}
+				pipe.setStatus(PipeStatus.DISCONNECTED);
+				if (listener != null)
+					listener.onClose(this, p.getJson());
+			} catch (IOException | JsonParseException ex) {
+				LOGGER.error("Reading thread encountered an " + ex.getClass().getSimpleName(), ex);
+
+				pipe.setStatus(PipeStatus.DISCONNECTED);
+				if (listener != null)
+					listener.onDisconnect(this, ex);
+			}
+		});
+
+		LOGGER.debug("Starting IPCClient reading thread!");
+		readThread.start();
+	}
+
+	// Private static methods
+
+	/**
+	 * Finds the current process ID.
+	 *
+	 * @return The current process ID.
+	 */
+	private static int getPID() {
+		String pr = ManagementFactory.getRuntimeMXBean().getName();
+		return Integer.parseInt(pr.substring(0, pr.indexOf('@')));
+	}
+	
 	/**
 	 * Constants representing events that can be subscribed to using
 	 * {@link #subscribe(Event)}.
@@ -326,117 +410,5 @@ public final class IPCClient implements Closeable {
 
 			return UNKNOWN;
 		}
-	}
-
-	// Private methods
-
-	/**
-	 * Makes sure that the client is connected (or not) depending on if it should
-	 * for the current state.
-	 *
-	 * @param connected Whether to check in the context of the IPCClient being
-	 *                  connected or not.
-	 */
-	private void validateConnected(boolean connected) {
-		if (connected && getStatus() != PipeStatus.CONNECTED)
-			throw new IllegalStateException(String.format("IPCClient (ID: %d) is not connected!", clientId));
-		if (!connected && getStatus() == PipeStatus.CONNECTED)
-			throw new IllegalStateException(String.format("IPCClient (ID: %d) is already connected!", clientId));
-	}
-
-	/**
-	 * Initializes this IPCClient's {@link IPCClient#readThread readThread} and
-	 * calls the first {@link Pipe#read()}.
-	 */
-	private void startReading() {
-		readThread = new Thread(() -> {
-			try {
-				Packet p;
-				while ((p = pipe.read()).getOp() != OpCode.CLOSE) {
-					JsonObject json = p.getJson();
-					Event event = Event.of(json.has("evt") && !json.get("evt").isJsonNull() ? json.getAsJsonPrimitive("evt").getAsString() : null);
-					String nonce = json.has("nonce") && !json.get("nonce").isJsonNull() ? json.getAsJsonPrimitive("nonce").getAsString() : null;
-
-					switch (event) {
-						case NULL:
-							if (nonce != null && callbacks.containsKey(nonce))
-								callbacks.remove(nonce).succeed(p);
-							break;
-
-						case ERROR:
-							if (nonce != null && callbacks.containsKey(nonce)) {
-								JsonObject data = json.getAsJsonObject("data");
-								callbacks.remove(nonce).fail(data.has("message") ? data.get("message").getAsString() : null);
-							}
-
-							break;
-
-						case ACTIVITY_JOIN:
-							LOGGER.debug("Reading thread received a 'join' event.");
-							break;
-
-						case ACTIVITY_SPECTATE:
-							LOGGER.debug("Reading thread received a 'spectate' event.");
-							break;
-
-						case ACTIVITY_JOIN_REQUEST:
-							LOGGER.debug("Reading thread received a 'join request' event.");
-							break;
-
-						case UNKNOWN:
-							LOGGER.debug("Reading thread encountered an event with an unknown type: " + json.get("evt").getAsString());
-							break;
-					}
-					if (listener != null && json.has("cmd") && json.get("cmd").getAsString().equals("DISPATCH")) {
-						try {
-							JsonObject data = json.getAsJsonObject("data");
-							switch (Event.of(json.get("evt").getAsString())) {
-								case ACTIVITY_JOIN:
-									listener.onActivityJoin(this, data.get("secret").getAsString());
-									break;
-
-								case ACTIVITY_SPECTATE:
-									listener.onActivitySpectate(this, data.get("secret").getAsString());
-									break;
-
-								case ACTIVITY_JOIN_REQUEST:
-									JsonObject u = data.getAsJsonObject("user");
-									User user = new User(u.get("username").getAsString(), u.get("discriminator").getAsString(),
-											Long.parseLong(u.get("id").getAsString()), u.has("avatar") ? u.get("avatar").getAsString() : null);
-
-									listener.onActivityJoinRequest(this, data.has("secret") ? data.get("secret").getAsString() : null, user);
-									break;
-							}
-						} catch (Exception e) {
-							LOGGER.error("Exception when handling event: ", e);
-						}
-					}
-				}
-				pipe.setStatus(PipeStatus.DISCONNECTED);
-				if (listener != null)
-					listener.onClose(this, p.getJson());
-			} catch (IOException | JsonParseException ex) {
-				LOGGER.error("Reading thread encountered an " + ex.getClass().getSimpleName(), ex);
-
-				pipe.setStatus(PipeStatus.DISCONNECTED);
-				if (listener != null)
-					listener.onDisconnect(this, ex);
-			}
-		});
-
-		LOGGER.debug("Starting IPCClient reading thread!");
-		readThread.start();
-	}
-
-	// Private static methods
-
-	/**
-	 * Finds the current process ID.
-	 *
-	 * @return The current process ID.
-	 */
-	private static int getPID() {
-		String pr = ManagementFactory.getRuntimeMXBean().getName();
-		return Integer.parseInt(pr.substring(0, pr.indexOf('@')));
 	}
 }

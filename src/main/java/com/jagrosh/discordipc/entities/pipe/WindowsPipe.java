@@ -20,7 +20,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.jagrosh.discordipc.IPCClient;
-import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.Packet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 public class WindowsPipe extends Pipe {
 
@@ -36,8 +34,8 @@ public class WindowsPipe extends Pipe {
 
 	private final RandomAccessFile file;
 
-	WindowsPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
-		super(ipcClient, callbacks);
+	WindowsPipe(IPCClient ipcClient, String location) throws IOException {
+		super(ipcClient);
 		this.file = new RandomAccessFile(location, "rw");
 	}
 

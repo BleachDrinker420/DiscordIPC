@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.UUID;
 
 public abstract class Pipe implements Closeable {
@@ -43,15 +42,12 @@ public abstract class Pipe implements Closeable {
 	protected IPCListener listener;
 	protected PipeStatus status = PipeStatus.CONNECTING;
 	private DiscordBuild build;
-	private final Map<String, Callback> callbacks;
 
-	Pipe(IPCClient ipcClient, Map<String, Callback> callbacks) {
+	Pipe(IPCClient ipcClient) {
 		this.ipcClient = ipcClient;
-		this.callbacks = callbacks;
 	}
 
-	public static Pipe openPipe(IPCClient ipcClient, long clientId, Map<String, Callback> callbacks,
-			DiscordBuild... preferredOrder) throws NoDiscordClientException {
+	public static Pipe openPipe(IPCClient ipcClient, long clientId, DiscordBuild... preferredOrder) throws NoDiscordClientException {
 
 		// Store the most preferred pipe
 		int preference = Integer.MAX_VALUE;
@@ -60,7 +56,7 @@ public abstract class Pipe implements Closeable {
 			try {
 				String location = getPipeLocation(i);
 				LOGGER.debug("Searching for IPC: {}", location);
-				Pipe pipe = createPipe(ipcClient, callbacks, location);
+				Pipe pipe = createPipe(ipcClient, location);
 
 				JsonObject dataJson = new JsonObject();
 				dataJson.addProperty("v", VERSION);
@@ -107,13 +103,13 @@ public abstract class Pipe implements Closeable {
 		throw new NoDiscordClientException();
 	}
 
-	private static Pipe createPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
+	private static Pipe createPipe(IPCClient ipcClient, String location) throws IOException {
 		String osName = System.getProperty("os.name").toLowerCase();
 
 		if (osName.contains("win")) {
-			return new WindowsPipe(ipcClient, callbacks, location);
+			return new WindowsPipe(ipcClient, location);
 		} else if (osName.contains("linux") || osName.contains("mac")) {
-			return new UnixPipe(ipcClient, callbacks, location);
+			return new UnixPipe(ipcClient, location);
 		}
 
 		throw new RuntimeException("Unsupported OS: " + osName);
@@ -124,7 +120,7 @@ public abstract class Pipe implements Closeable {
 	 *
 	 * @param op       The {@link Packet.OpCode} to send data with.
 	 * @param data     The data to send.
-	 * @param callback callback for the response
+	 * @param callback callback for the response.
 	 */
 	public void send(Packet.OpCode op, JsonObject data, Callback callback) {
 		try {
@@ -132,16 +128,20 @@ public abstract class Pipe implements Closeable {
 			data.addProperty("nonce", nonce);
 
 			Packet p = new Packet(op, data);
-			if (callback != null && !callback.isEmpty())
-				callbacks.put(nonce, callback);
 
 			write(p.toBytes());
 			LOGGER.debug("Sent packet: {}", p.toString());
+			
+			if (callback != null)
+				callback.succeed(p);
 			if (listener != null)
 				listener.onPacketSent(ipcClient, p);
 		} catch (IOException ex) {
 			LOGGER.error("Encountered an IOException while sending a packet and disconnected!", ex);
 			status = PipeStatus.DISCONNECTED;
+			
+			if (callback != null)
+				callback.fail(ex.getMessage());
 		}
 	}
 

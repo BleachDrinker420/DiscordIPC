@@ -48,13 +48,13 @@ public class Packet {
 	 *
 	 * @return This Packet as a {@code byte} array.
 	 */
-	public byte[] toBytes() {
+	public ByteBuffer toBytes() {
 		byte[] d = data.toString().getBytes(StandardCharsets.UTF_8);
 		ByteBuffer packet = ByteBuffer.allocate(d.length + 2 * Integer.BYTES);
 		packet.putInt(Integer.reverseBytes(op.ordinal()));
 		packet.putInt(Integer.reverseBytes(d.length));
 		packet.put(d);
-		return packet.array();
+		return packet;
 	}
 
 	/**
@@ -85,6 +85,10 @@ public class Packet {
 	 * Discord and the {@link com.jagrosh.discordipc.IPCClient IPCClient} connected.
 	 */
 	public enum OpCode {
-		HANDSHAKE, FRAME, CLOSE, PING, PONG
+		HANDSHAKE,
+		FRAME,
+		CLOSE,
+		PING,
+		PONG
 	}
 }

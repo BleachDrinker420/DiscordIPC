@@ -22,72 +22,73 @@ import com.google.gson.JsonParser;
 import com.jagrosh.discordipc.IPCClient;
 import com.jagrosh.discordipc.entities.Callback;
 import com.jagrosh.discordipc.entities.Packet;
+
+import org.newsclub.net.unix.AFUNIXSocket;
+import org.newsclub.net.unix.AFUNIXSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Map;
 
 public class UnixPipe extends Pipe {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(UnixPipe.class);
-	private final Socket socket;
+
+	private final AFUNIXSocket socket;
 
 	UnixPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
 		super(ipcClient, callbacks);
 
-		socket = new Socket();
-		socket.connect(UnixDomainSocketAddress.of(location));
+		socket = AFUNIXSocket.connectTo(new AFUNIXSocketAddress(new File(location)));
 	}
 
 	@Override
 	public Packet read() throws IOException, JsonParseException {
 		InputStream is = socket.getInputStream();
 
-		while ((status == PipeStatus.CONNECTED || status == PipeStatus.CLOSING) && is.available() == 0) {
+		// Search
+		while (true) {
+			if (status == PipeStatus.DISCONNECTED)
+				throw new IOException("Disconnected!");
+
+			if (status == PipeStatus.CLOSED)
+				return new Packet(Packet.OpCode.CLOSE, null);
+
+			if (is.available() != 0)
+				break;
+
 			try {
 				Thread.sleep(50);
 			} catch (InterruptedException ignored) {
 			}
 		}
+		
+		byte[] metadata = new byte[8];
+		is.read(metadata);
+		ByteBuffer metadatab = ByteBuffer.wrap(metadata).order(ByteOrder.LITTLE_ENDIAN);
 
-		/*
-		 * byte[] buf = new byte[is.available()]; is.read(buf, 0, buf.length);
-		 * LOGGER.info(new String(buf));
-		 * 
-		 * if (true) return null;
-		 */
+		Packet.OpCode op = Packet.OpCode.values()[metadatab.getInt()];
 
-		if (status == PipeStatus.DISCONNECTED)
-			throw new IOException("Disconnected!");
+		byte[] data = new byte[metadatab.getInt()];
+		is.read(data);
 
-		if (status == PipeStatus.CLOSED)
-			return new Packet(Packet.OpCode.CLOSE, null);
-
-		// Read the op and length. Both are signed ints
-		byte[] d = new byte[8];
-		is.read(d);
-		ByteBuffer bb = ByteBuffer.wrap(d);
-
-		Packet.OpCode op = Packet.OpCode.values()[Integer.reverseBytes(bb.getInt())];
-		d = new byte[Integer.reverseBytes(bb.getInt())];
-
-		is.read(d);
-
-		// @SuppressWarnings("deprecation")
-		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
+		Packet p = new Packet(op, new JsonParser().parse(new String(data)).getAsJsonObject());
 		LOGGER.debug("Received packet: {}", p.toString());
+
 		if (listener != null)
 			listener.onPacketReceived(ipcClient, p);
+
 		return p;
 	}
 
 	@Override
-	public void write(byte[] b) throws IOException {
-		socket.getOutputStream().write(b);
+	public void write(ByteBuffer bytes) throws IOException {
+		socket.getOutputStream().write(bytes.array());
 	}
 
 	@Override
@@ -96,6 +97,7 @@ public class UnixPipe extends Pipe {
 		status = PipeStatus.CLOSING;
 		send(Packet.OpCode.CLOSE, new JsonObject(), null);
 		status = PipeStatus.CLOSED;
+
 		socket.close();
 	}
 }

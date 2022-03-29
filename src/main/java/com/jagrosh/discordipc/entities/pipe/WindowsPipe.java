@@ -25,9 +25,9 @@ import com.jagrosh.discordipc.entities.Packet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class WindowsPipe extends Pipe {
@@ -36,18 +36,14 @@ public class WindowsPipe extends Pipe {
 
 	private final RandomAccessFile file;
 
-	WindowsPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) {
+	WindowsPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
 		super(ipcClient, callbacks);
-		try {
-			this.file = new RandomAccessFile(location, "rw");
-		} catch (FileNotFoundException e) {
-			throw new RuntimeException(e);
-		}
+		this.file = new RandomAccessFile(location, "rw");
 	}
 
 	@Override
-	public void write(byte[] b) throws IOException {
-		file.write(b);
+	public void write(ByteBuffer bytes) throws IOException {
+		file.write(bytes.array());
 	}
 
 	@Override
@@ -55,30 +51,33 @@ public class WindowsPipe extends Pipe {
 		// Should check if we're connected before reading the file.
 		// When we don't do this, it results in an IOException because the
 		// read stream had closed for the RandomAccessFile#length() call.
-		while ((status == PipeStatus.CONNECTED || status == PipeStatus.CLOSING) && file.length() == 0) {
+		while (true) {
+			if (status == PipeStatus.DISCONNECTED)
+				throw new IOException("Disconnected!");
+
+			if (status == PipeStatus.CLOSED)
+				return new Packet(Packet.OpCode.CLOSE, null);
+
+			if (file.length() != 0)
+				break;
+
 			try {
 				Thread.sleep(50);
 			} catch (InterruptedException ignored) {
 			}
 		}
 
-		if (status == PipeStatus.DISCONNECTED)
-			throw new IOException("Disconnected!");
-
-		if (status == PipeStatus.CLOSED)
-			return new Packet(Packet.OpCode.CLOSE, null);
-
 		Packet.OpCode op = Packet.OpCode.values()[Integer.reverseBytes(file.readInt())];
-		int len = Integer.reverseBytes(file.readInt());
-		byte[] d = new byte[len];
 
+		byte[] d = new byte[Integer.reverseBytes(file.readInt())];
 		file.readFully(d);
 
-		// @SuppressWarnings("deprecation")
 		Packet p = new Packet(op, new JsonParser().parse(new String(d)).getAsJsonObject());
 		LOGGER.debug("Received packet: {}", p.toString());
+
 		if (listener != null)
 			listener.onPacketReceived(ipcClient, p);
+
 		return p;
 	}
 
@@ -88,6 +87,7 @@ public class WindowsPipe extends Pipe {
 		status = PipeStatus.CLOSING; // start closing pipe
 		send(Packet.OpCode.CLOSE, new JsonObject(), null);
 		status = PipeStatus.CLOSED; // finish closing pipe
+
 		file.close();
 	}
 

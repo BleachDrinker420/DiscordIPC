@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.UUID;
 
@@ -95,7 +96,8 @@ public abstract class Pipe implements Closeable {
 					preference = newPref;
 					bestPipe = pipe;
 				}
-			} catch (IOException | JsonParseException ignored) {
+			} catch (IOException | JsonParseException e) {
+				e.printStackTrace();
 			}
 		}
 
@@ -105,20 +107,16 @@ public abstract class Pipe implements Closeable {
 		throw new NoDiscordClientException();
 	}
 
-	private static Pipe createPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) {
+	private static Pipe createPipe(IPCClient ipcClient, Map<String, Callback> callbacks, String location) throws IOException {
 		String osName = System.getProperty("os.name").toLowerCase();
 
 		if (osName.contains("win")) {
 			return new WindowsPipe(ipcClient, callbacks, location);
 		} else if (osName.contains("linux") || osName.contains("mac")) {
-			try {
-				return new UnixPipe(ipcClient, callbacks, location);
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-		} else {
-			throw new RuntimeException("Unsupported OS: " + osName);
+			return new UnixPipe(ipcClient, callbacks, location);
 		}
+
+		throw new RuntimeException("Unsupported OS: " + osName);
 	}
 
 	/**
@@ -158,7 +156,7 @@ public abstract class Pipe implements Closeable {
 	 */
 	public abstract Packet read() throws IOException, JsonParseException;
 
-	public abstract void write(byte[] b) throws IOException;
+	public abstract void write(ByteBuffer bytes) throws IOException;
 
 	/**
 	 * Generates a nonce.

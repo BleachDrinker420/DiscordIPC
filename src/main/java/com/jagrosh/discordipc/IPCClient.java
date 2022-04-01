@@ -307,8 +307,8 @@ public final class IPCClient implements Closeable {
 				Packet p;
 				while ((p = pipe.read()).getOp() != OpCode.CLOSE) {
 					JsonObject json = p.getJson();
-					Event event = Event.of(json.has("evt") ? json.getAsJsonPrimitive("evt").getAsString() : null);
-					JsonObject data = json.has("data") ? json.getAsJsonObject("data") : null;
+					Event event = Event.of(json.has("evt") && !json.get("evt").isJsonNull() ? json.getAsJsonPrimitive("evt").getAsString() : null);
+					JsonObject data = json.has("data") && !json.get("data").isJsonNull() ? json.getAsJsonObject("data") : null;
 					
 					LOGGER.debug("Reading thread received a '" + event + "' event.");
 					if (data != null && data.has("message"))
